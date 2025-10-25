@@ -1,8 +1,14 @@
 {
- "id": "yourname.enemies-panel",
   "name": "Enemies Panel",
   "version": "0.1.0",
   "manifest_version": 1,
+  "author": "Your Name",
   "description": "A basic panel for managing enemies in Owlbear Rodeo.",
-  "entry": "main.js"
+  "action": {
+    "title": "Enemies",
+    "icon": "icon-48.png",
+    "popover": "/index.html",
+    "width": 420,
+    "height": 480
+  }
 }

@@ -1,9 +1,9 @@
-import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@1.1.5/+esm";
+import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3.1.0/+esm";
 
 const PLUGIN_ID = "yourname.enemies-panel";
 
 OBR.onReady(async () => {
-  console.log("Enemies plugin ready!");
+  console.log("Enemies Panel plugin ready (OBR SDK v3.1.0)");
 
   await OBR.ui.registerPanel({
     id: `${PLUGIN_ID}/panel`,
@@ -11,6 +11,6 @@ OBR.onReady(async () => {
     icon: "crossed-swords",
     show: true,
     url: "index.html",
-    height: 400
+    height: 420
   });
 });

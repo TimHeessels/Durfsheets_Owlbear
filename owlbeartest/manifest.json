@@ -6,8 +6,8 @@
   "description": "A basic panel for managing enemies in Owlbear Rodeo.",
   "action": {
     "title": "Enemies",
-    "icon": "owlbeartest/icon-48.png",
-    "popover": "owlbeartest/index.html",
+    "icon": "/owlbeartest/icon-48.png",
+    "popover": "/owlbeartest/index.html",
     "width": 420,
     "height": 480
   }

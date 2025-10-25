@@ -12,7 +12,7 @@ OBR.onReady(async () => {
     title: "Enemies",
     icon: "crossed-swords",
     show: true,
-    url: "owlbeartest/index.html",
+    url: "/owlbeartest/index.html",
     height: 420
   });
 });

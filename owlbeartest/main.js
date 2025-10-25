@@ -7,12 +7,9 @@ OBR.onReady(async () => {
 
 
   OBR.onReady(() => {
-    setupContextMenu();
     setupInitiativeList(document.querySelector("#initiative-list"));
   });
-
 });
-
 
 export function setupInitiativeList(element) {
   const renderList = (items) => {

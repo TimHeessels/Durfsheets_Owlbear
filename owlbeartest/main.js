@@ -5,6 +5,8 @@ const PLUGIN_ID = "yourname.enemies-panel";
 OBR.onReady(async () => {
   console.log("Enemies Panel plugin ready (OBR SDK v3.1.0)");
 
+  
+
   await OBR.ui.registerPanel({
     id: `${PLUGIN_ID}/panel`,
     title: "Enemies",
@@ -14,3 +16,4 @@ OBR.onReady(async () => {
     height: 420
   });
 });
+

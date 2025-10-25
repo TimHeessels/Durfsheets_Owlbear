@@ -24,9 +24,9 @@ export function setupInitiativeList(element) {
     
     // Create new list nodes for each initiative item
     const nodes = [];
-    for (const initiativeItem of sortedItems) {
+    for (const initiativeItem of initiativeItems) {
       const node = document.createElement("li");
-      node.innerHTML = `${initiativeItem.name}`;
+      node.innerHTML = `${initiativeItem.name} `;
       nodes.push(node);
     }
     element.replaceChildren(...nodes);

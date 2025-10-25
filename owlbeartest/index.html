@@ -1,20 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>Enemies Panel</title>
   <style>
-    body {
-      background-color: #1e1e1e;
-      color: white;
-      font-family: sans-serif;
-      padding: 1rem;
-      margin: 0;
-    }
+    body { font-family: sans-serif; padding: 1rem; }
+    ul { padding-left: 1.2rem; }
   </style>
 </head>
 <body>
-  <h1>Enemies</h1>
-  <p>This is your new Owlbear panel!</p>
+  <h1>Active Tokens</h1>
+  <ul id="tokenList"></ul>
+
+  <script>
+    // Listen for messages from main.js
+    window.addEventListener("message", (event) => {
+      if (!event.data || event.data.type !== "updateTokens") return;
+
+      const tokens = event.data.tokens;
+      const ul = document.getElementById("tokenList");
+      ul.innerHTML = "";
+
+      tokens.forEach(t => {
+        const li = document.createElement("li");
+        li.textContent = `${t.name || "Unnamed"} (id: ${t.id})`;
+        ul.appendChild(li);
+      });
+    });
+  </script>
 </body>
 </html>

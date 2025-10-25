@@ -1,0 +1,8 @@
+{
+ "id": "yourname.enemies-panel",
+  "name": "Enemies Panel",
+  "version": "0.1.0",
+  "manifest_version": 1,
+  "description": "A basic panel for managing enemies in Owlbear Rodeo.",
+  "entry": "main.js"
+}

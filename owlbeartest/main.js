@@ -5,7 +5,7 @@ OBR.onReady(async () => {
   console.log("Enemies Panel plugin ready (OBR SDK v3.1.0)");
   OBR.scene.onReadyChange((ready) => {
     if (ready) {
-      setupCharacterRefs(document.querySelector("#initiative-list"), masterList);
+      setupCharacterRefs();
     }
   })
   //setTimeout(function () {  }, 7000);
@@ -33,18 +33,40 @@ const db = getDatabase(app);
 const PLUGIN_ID = "com.th.enemies";
 
 //We use name as ID from firebase
-const masterList = [];
+var masterList = [];
 const fallbackCharImage = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultCharImg.png";
 const fallbackEnemyImage = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultEnemyImg.png";
-const partyID = "mh1ud9sr004z4arqhq9f";
 
 let pendingUpdate = false;
 let latestImages = null;
 let latestMasterList = null;
 
 const TICK_INTERVAL = 500; // ms
-export function setupCharacterRefs(element, masterList) {
 
+
+// Load saved partyID from localStorage
+let currentPartyID = localStorage.getItem("partyID");
+
+// Handle user setting a new partyID
+document.getElementById("setPartyID").addEventListener("click", () => {
+  const input = document.getElementById("partyID").value.trim();
+  if (!input) return alert("Please enter a Party ID");
+
+  currentPartyID = input;
+
+  // Save for future reloads
+  localStorage.setItem("partyID", currentPartyID);
+
+  // Setup Firebase listeners for this party
+  setupCharacterRefs();
+});
+
+export function setupCharacterRefs() {
+
+  if (currentPartyID == null || currentPartyID == "")
+    return;
+  
+  document.getElementById("partyID").value = currentPartyID;
 
   const updateMasterList = async () => {
     // 1️⃣ Merge players and enemies
@@ -77,7 +99,7 @@ export function setupCharacterRefs(element, masterList) {
   let enemiesList = [];
 
   // Listen for players
-  const partyRefPlayers = ref(db, `Parties/${partyID}/CharactersBasic`);
+  const partyRefPlayers = ref(db, `Parties/${currentPartyID}/CharactersBasic`);
   onValue(partyRefPlayers, (snapshotPlayers) => {
     const dataPlayers = snapshotPlayers.val() || {};
 
@@ -85,9 +107,10 @@ export function setupCharacterRefs(element, masterList) {
       .filter(([_, charData]) => charData.characterType !== "Storage")
       .map(([charID, charData]) => ({
         id: charID,
-        url: charData.CharacterImageLink ? charData.CharacterImageLink.url : fallbackCharImage,
+        url: charData.CharacterImageLink ? charData.CharacterImageLink.token.url : fallbackCharImage,
         text: charData.CharacterName,
         wounds: charData.Wounds || 0,
+        state: charData.characterState,
         type: "player",
       }));
 
@@ -97,16 +120,18 @@ export function setupCharacterRefs(element, masterList) {
   });
 
   // Listen for enemies
-  const partyRefEnemies = ref(db, `Parties/${partyID}/ActiveEnemies`);
+  const partyRefEnemies = ref(db, `Parties/${currentPartyID}/ActiveEnemies`);
   onValue(partyRefEnemies, (snapshotEnemies) => {
     const dataEnemies = snapshotEnemies.val() || {};
 
     enemiesList = Object.entries(dataEnemies)
       .map(([charID, charData]) => ({
         id: charID,
-        url: charData.CharacterImageLink ? charData.CharacterImageLink.url : fallbackEnemyImage,
-        text: charData.EnemyName + "["+charData.EnemyNumber+"]",
+        url: charData.CharacterImageLink ? charData.CharacterImageLink.token.url : fallbackEnemyImage,
+        text: "[" + charData.EnemyNumber + "] " + charData.EnemyName,
         wounds: charData.Wounds || 0,
+        damage: charData.Damage || 0,
+        state: charData.IsDead ? "Dead" : "Active",
         type: "enemy",
       }));
     console.log("Found " + enemiesList.length + " enemies");
@@ -134,18 +159,29 @@ export function setupCharacterRefs(element, masterList) {
     }
   }
 
-  const characterRefs = new Map(); // id -> { id, name, item }
+  function GetCharacterText(master) {
+    if (master.state == "Dead")
+      return master.text + " (DEAD)";
+    else if (master.state == "Away")
+      return master.text + " (Away)";
+    else
+      if (master.type == "enemy")
+        return master.text + " (" + master.damage + " dmg)";
+      else
+        return master.text + " (" + master.wounds + " wounds)";
+  }
 
   async function UpdateList(characterItems) {
 
-    const masterIds = masterList.map((m) => m.name); // or m.id if you rename that
+    const masterIds = masterList.map((m) => m.id); // or m.id if you rename that
 
     const itemsToRemove = characterItems.filter(
-      (item) => !masterIds.includes(item.metadata[`${PLUGIN_ID}/charID`])
+      (item) =>
+        item.metadata[`${PLUGIN_ID}/durfCharacter`] === true &&
+        !masterIds.includes(item.metadata[`${PLUGIN_ID}/charID`])
     );
-
     if (itemsToRemove.length > 0) {
-      console.log("Removing outdated tokens:", itemsToRemove.map(i => i.name));
+      console.log("Removing outdated tokens:", itemsToRemove.map(i => i.id));
       await OBR.scene.items.deleteItems(itemsToRemove.map(i => i.id));
     }
 
@@ -159,7 +195,7 @@ export function setupCharacterRefs(element, masterList) {
     for (const master of masterList) {
       // Check if we already have an item for this ID
       let item = characterItems.find(
-        (i) => i.metadata[`${PLUGIN_ID}/charID`] === master.name
+        (i) => i.metadata[`${PLUGIN_ID}/charID`] === master.id
       );
 
       console.log("item: " + item);
@@ -176,31 +212,25 @@ export function setupCharacterRefs(element, masterList) {
           },
           { dpi: 512, offset: { x: 256, y: 280 } }
         )
-          .plainText(master.text + " (" + master.wounds + " wounds)")
-          .metadata({ [`${PLUGIN_ID}/charID`]: master.name })
+          .plainText(GetCharacterText(master))
+          .metadata({
+            [`${PLUGIN_ID}/charID`]: master.id,
+            [`${PLUGIN_ID}/durfCharacter`]: true,
+          })
           .textAlign("CENTER")
           .build();
-        //item.name = master.name;
         newItemsToPlace.push(item);
       }
       else {
         //Update existing images on the scene with the latest data
 
-        //TODO: Update image on change
-
         await OBR.scene.items.updateItems([item], (images) => {
           for (let image of images) {
-            image.text.plainText = (master.text + " (" + master.wounds + " wounds)")
+            image.text.plainText = GetCharacterText(master)
+            //image.url = getSafeImageURL(master.url)  //TODO: Update image on change
           }
         });
       }
-
-      // Store reference
-      characterRefs.set(master.name, {
-        name: master.name,
-        text: master.text,
-        item
-      });
     }
 
     //Add new tokes
@@ -209,16 +239,7 @@ export function setupCharacterRefs(element, masterList) {
 
     console.log("characterItems count " + characterItems.length);
 
-    // Build the DOM list
-    const nodes = [];
-    for (const [id, ref] of characterRefs) {
-      const node = document.createElement("li");
-      node.textContent = `${ref.text} [id: ${ref.name}]`;
-      nodes.push(node);
-    }
-    element.replaceChildren(...nodes);
   }
-
 
   //TODO: Only one check for changes in scene at startup?
 

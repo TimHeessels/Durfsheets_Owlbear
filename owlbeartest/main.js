@@ -13,7 +13,7 @@ OBR.onReady(async () => {
 
 
 
-import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.1.0/firebase-database.js";
+import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.1.0/firebase-database.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.1.0/firebase-app.js";
 
 // Your Firebase config
@@ -30,37 +30,94 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
+const PLUGIN_ID = "com.th.enemies";
 
 //We use name as ID from firebase
 const masterList = [];
-const fallbackUImageRL = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultCharImg.png";
+const fallbackCharImage = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultCharImg.png";
+const fallbackEnemyImage = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultEnemyImg.png";
+const partyID = "mh1ud9sr004z4arqhq9f";
 
+let pendingUpdate = false;
+let latestImages = null;
+let latestMasterList = null;
+
+const TICK_INTERVAL = 500; // ms
 export function setupCharacterRefs(element, masterList) {
-  buildMasterList("m7g58g0z00rrfn8r8i9f");
 
-  async function buildMasterList(partyID) {
 
-    const partyRef = ref(db, `Parties/${partyID}/CharactersBasic`);
-    onValue(partyRef, async (snapshot) => {
-      const data = snapshot.val() || {};
-      masterList = Object.entries(data).map(([charID, charData]) => ({
-        name: charID,
-        url: charData.CharacterImageLink ? charData.CharacterImageLink.url : fallbackUImageRL,
+  const updateMasterList = async () => {
+    // 1️⃣ Merge players and enemies
+    masterList = [...playersList, ...enemiesList];
+    console.log("masterList count " + masterList.length);
+
+    // 2️⃣ Update the Owlbear tokens
+    const images = await OBR.scene.items.getItems(isImage);
+    scheduleUpdate(images, masterList);
+  };
+
+  setInterval(async () => {
+    if (!pendingUpdate) return;
+
+    // Execute the latest update
+    await UpdateList(latestImages, latestMasterList);
+
+    // Reset
+    pendingUpdate = false;
+  }, TICK_INTERVAL);
+
+  function scheduleUpdate(images, masterList) {
+    latestImages = images;
+    latestMasterList = masterList;
+    pendingUpdate = true;
+  }
+
+  // Store the latest snapshot locally
+  let playersList = [];
+  let enemiesList = [];
+
+  // Listen for players
+  const partyRefPlayers = ref(db, `Parties/${partyID}/CharactersBasic`);
+  onValue(partyRefPlayers, (snapshotPlayers) => {
+    const dataPlayers = snapshotPlayers.val() || {};
+
+    playersList = Object.entries(dataPlayers)
+      .filter(([_, charData]) => charData.characterType !== "Storage")
+      .map(([charID, charData]) => ({
+        id: charID,
+        url: charData.CharacterImageLink ? charData.CharacterImageLink.url : fallbackCharImage,
         text: charData.CharacterName,
-        wounds: charData.Wounds || 0
+        wounds: charData.Wounds || 0,
+        type: "player",
       }));
 
-      console.log("masterList from firebase: " + masterList.length);
+    console.log("Found " + playersList.length + " players");
 
-      var images = await OBR.scene.items.getItems(isImage);
-      UpdateList(images);
-    });
-  }
+    updateMasterList();
+  });
+
+  // Listen for enemies
+  const partyRefEnemies = ref(db, `Parties/${partyID}/ActiveEnemies`);
+  onValue(partyRefEnemies, (snapshotEnemies) => {
+    const dataEnemies = snapshotEnemies.val() || {};
+
+    enemiesList = Object.entries(dataEnemies)
+      .map(([charID, charData]) => ({
+        id: charID,
+        url: charData.CharacterImageLink ? charData.CharacterImageLink.url : fallbackEnemyImage,
+        text: charData.EnemyName + "["+charData.EnemyNumber+"]",
+        wounds: charData.Wounds || 0,
+        type: "enemy",
+      }));
+    console.log("Found " + enemiesList.length + " enemies");
+
+    updateMasterList();
+  });
 
   async function getSafeImageURL(url) {
     const ok = await testImageCORS(url);
-    console.log("URL check for " + url + " = " + ok);
-    return ok ? url : fallbackUImageRL;
+    //console.log("URL check for " + url + " = " + ok);
+    return ok ? url : fallbackCharImage;
   }
 
   async function testImageCORS(url) {
@@ -81,6 +138,18 @@ export function setupCharacterRefs(element, masterList) {
 
   async function UpdateList(characterItems) {
 
+    const masterIds = masterList.map((m) => m.name); // or m.id if you rename that
+
+    const itemsToRemove = characterItems.filter(
+      (item) => !masterIds.includes(item.metadata[`${PLUGIN_ID}/charID`])
+    );
+
+    if (itemsToRemove.length > 0) {
+      console.log("Removing outdated tokens:", itemsToRemove.map(i => i.name));
+      await OBR.scene.items.deleteItems(itemsToRemove.map(i => i.id));
+    }
+
+
     const dpi = await OBR.scene.grid.getDpi() * 2;
 
     const viewportPos = await OBR.viewport.getPosition();
@@ -89,7 +158,11 @@ export function setupCharacterRefs(element, masterList) {
     var newItemsToPlace = [];
     for (const master of masterList) {
       // Check if we already have an item for this ID
-      let item = characterItems.find(i => i.name === master.name);
+      let item = characterItems.find(
+        (i) => i.metadata[`${PLUGIN_ID}/charID`] === master.name
+      );
+
+      console.log("item: " + item);
       if (!item) {
 
         var safeURL = await getSafeImageURL(master.url);
@@ -101,20 +174,25 @@ export function setupCharacterRefs(element, masterList) {
             url: safeURL,
             mime: "image/png",
           },
-          {dpi: 512, offset: { x: 256, y: 280 } }
+          { dpi: 512, offset: { x: 256, y: 280 } }
         )
           .plainText(master.text + " (" + master.wounds + " wounds)")
+          .metadata({ [`${PLUGIN_ID}/charID`]: master.name })
           .textAlign("CENTER")
           .build();
-        item.name = master.name;
-        item.position = viewportPos;
-        console.log("item.name: " + item.name);
+        //item.name = master.name;
         newItemsToPlace.push(item);
-
       }
       else {
-        console.log(item.text.plainText + ", master.text: " + master.text + " master.wounds: " + master.wounds)
-        item.text.plainText = (master.text + " (" + master.wounds + " wounds)")
+        //Update existing images on the scene with the latest data
+
+        //TODO: Update image on change
+
+        await OBR.scene.items.updateItems([item], (images) => {
+          for (let image of images) {
+            image.text.plainText = (master.text + " (" + master.wounds + " wounds)")
+          }
+        });
       }
 
       // Store reference
@@ -125,6 +203,7 @@ export function setupCharacterRefs(element, masterList) {
       });
     }
 
+    //Add new tokes
     if (newItemsToPlace.length > 0)
       OBR.scene.items.addItems(newItemsToPlace);
 

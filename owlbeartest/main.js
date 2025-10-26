@@ -3,11 +3,12 @@ import OBR, { buildImage, isImage } from "https://cdn.jsdelivr.net/npm/@owlbear-
 
 OBR.onReady(async () => {
   console.log("Enemies Panel plugin ready (OBR SDK v3.1.0)");
-
-
-  OBR.onReady(() => {
-    setTimeout(function () { setupCharacterRefs(document.querySelector("#initiative-list"), masterList); }, 7000);
-  });
+  OBR.scene.onReadyChange((ready) => {
+    if (ready) {
+      setupCharacterRefs(document.querySelector("#initiative-list"), masterList);
+    }
+  })
+  //setTimeout(function () {  }, 7000);
 });
 
 
@@ -32,7 +33,7 @@ const db = getDatabase(app);
 
 //We use name as ID from firebase
 const masterList = [];
-const fallbackUImageRL = "./DefaultCharImg.png"
+const fallbackUImageRL = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultCharImg.png";
 
 export function setupCharacterRefs(element, masterList) {
   buildMasterList("m7g58g0z00rrfn8r8i9f");
@@ -58,6 +59,7 @@ export function setupCharacterRefs(element, masterList) {
 
   async function getSafeImageURL(url) {
     const ok = await testImageCORS(url);
+    console.log("URL check for " + url + " = " + ok);
     return ok ? url : fallbackUImageRL;
   }
 
@@ -78,6 +80,13 @@ export function setupCharacterRefs(element, masterList) {
   const characterRefs = new Map(); // id -> { id, name, item }
 
   async function UpdateList(characterItems) {
+
+    const dpi = await OBR.scene.grid.getDpi() * 2;
+
+    const viewportPos = await OBR.viewport.getPosition();
+    console.log("viewportPos: " + viewportPos + ", dpi: " + dpi);
+
+    var newItemsToPlace = [];
     for (const master of masterList) {
       // Check if we already have an item for this ID
       let item = characterItems.find(i => i.name === master.name);
@@ -87,19 +96,20 @@ export function setupCharacterRefs(element, masterList) {
 
         item = buildImage(
           {
-            height: 100,
-            width: 100,
+            height: 512,
+            width: 512,
             url: safeURL,
             mime: "image/png",
           },
-          { dpi: 300, offset: { x: 150, y: 150 } }
+          {dpi: 512, offset: { x: 256, y: 280 } }
         )
           .plainText(master.text + " (" + master.wounds + " wounds)")
           .textAlign("CENTER")
           .build();
         item.name = master.name;
+        item.position = viewportPos;
         console.log("item.name: " + item.name);
-        OBR.scene.items.addItems([item]);
+        newItemsToPlace.push(item);
 
       }
       else {
@@ -114,6 +124,9 @@ export function setupCharacterRefs(element, masterList) {
         item
       });
     }
+
+    if (newItemsToPlace.length > 0)
+      OBR.scene.items.addItems(newItemsToPlace);
 
     console.log("characterItems count " + characterItems.length);
 

@@ -1,6 +1,5 @@
 import OBR, { buildImage, isImage } from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3.1.0/+esm";
 
-
 OBR.onReady(async () => {
   console.log("Enemies Panel plugin ready (OBR SDK v3.1.0)");
   OBR.scene.onReadyChange((ready) => {
@@ -8,10 +7,7 @@ OBR.onReady(async () => {
       setupCharacterRefs();
     }
   })
-  //setTimeout(function () {  }, 7000);
 });
-
-
 
 import { getDatabase, ref, onValue, get } from "https://www.gstatic.com/firebasejs/10.1.0/firebase-database.js";
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.1.0/firebase-app.js";
@@ -69,11 +65,7 @@ export function setupCharacterRefs() {
   document.getElementById("partyID").value = currentPartyID;
 
   const updateMasterList = async () => {
-    // 1️⃣ Merge players and enemies
     masterList = [...playersList, ...enemiesList];
-    console.log("masterList count " + masterList.length);
-
-    // 2️⃣ Update the Owlbear tokens
     const images = await OBR.scene.items.getItems(isImage);
     scheduleUpdate(images, masterList);
   };
@@ -102,7 +94,6 @@ export function setupCharacterRefs() {
   const partyRefPlayers = ref(db, `Parties/${currentPartyID}/CharactersBasic`);
   onValue(partyRefPlayers, (snapshotPlayers) => {
     const dataPlayers = snapshotPlayers.val() || {};
-
 
     playersList = Object.entries(dataPlayers)
       .filter(([_, charData]) => charData.characterType !== "Storage")
@@ -169,7 +160,7 @@ export function setupCharacterRefs() {
       if (master.type == "enemy")
         return master.text + " (" + master.damage + " dmg)";
       else
-        return master.text + (master.wounds >0 ? " (" + master.wounds + " wounds)" : "");
+        return master.text + (master.wounds > 0 ? " (" + master.wounds + " wounds)" : "");
   }
 
   async function UpdateList(characterItems) {
@@ -188,7 +179,6 @@ export function setupCharacterRefs() {
       await OBR.scene.items.deleteItems(itemsToRemove.map(i => i.id));
     }
 
-
     const dpi = await OBR.scene.grid.getDpi() * 2;
 
     const viewportPos = await OBR.viewport.getPosition();
@@ -201,9 +191,10 @@ export function setupCharacterRefs() {
         (i) => i.metadata[`${PLUGIN_ID}/charID`] === master.id
       );
 
+        var safeURL = await getSafeImageURL(master.url);
+
       if (!item) {
 
-        var safeURL = await getSafeImageURL(master.url);
 
         item = buildImage(
           {
@@ -227,10 +218,9 @@ export function setupCharacterRefs() {
         //Update existing images on the scene with the latest data
 
         await OBR.scene.items.updateItems([item], (images) => {
-          for (let image of images) {
-            image.text.plainText = GetCharacterText(master)
-            //image.url = getSafeImageURL(master.url)  //TODO: Update image on change
-          }
+          console.log("images: " + images.length);
+          images[0].text.plainText = GetCharacterText(master);
+          images[0].image.url = safeURL;
         });
       }
     }
@@ -238,7 +228,7 @@ export function setupCharacterRefs() {
     //Add new tokes
     if (newItemsToPlace.length > 0)
       OBR.scene.items.addItems(newItemsToPlace);
-    
+
 
   }
 }

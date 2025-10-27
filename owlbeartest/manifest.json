@@ -6,8 +6,8 @@
   "description": "Automatically adds, updates and removes icons for characters and enemies in Owlbear Rodeo from your Durfsheets party.",
   "action": {
     "title": "Enemies",
-    "icon": "/owlbeartest/DurfSheetsLogo.png",
-    "popover": "/owlbeartest/index.html",
+    "icon": "/Durfsheets_Owlbear/owlbeartest/DurfSheetsLogo.png",
+    "popover": "/Durfsheets_Owlbear/owlbeartest/index.html",
     "width": 420,
     "height": 480
   }

@@ -65,7 +65,7 @@ export function setupCharacterRefs() {
 
   if (currentPartyID == null || currentPartyID == "")
     return;
-  
+
   document.getElementById("partyID").value = currentPartyID;
 
   const updateMasterList = async () => {
@@ -103,11 +103,12 @@ export function setupCharacterRefs() {
   onValue(partyRefPlayers, (snapshotPlayers) => {
     const dataPlayers = snapshotPlayers.val() || {};
 
+
     playersList = Object.entries(dataPlayers)
       .filter(([_, charData]) => charData.characterType !== "Storage")
       .map(([charID, charData]) => ({
         id: charID,
-        url: charData.CharacterImageLink ? charData.CharacterImageLink.token.url : fallbackCharImage,
+        url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackCharImage,
         text: charData.CharacterName,
         wounds: charData.Wounds || 0,
         state: charData.characterState,
@@ -127,7 +128,7 @@ export function setupCharacterRefs() {
     enemiesList = Object.entries(dataEnemies)
       .map(([charID, charData]) => ({
         id: charID,
-        url: charData.CharacterImageLink ? charData.CharacterImageLink.token.url : fallbackEnemyImage,
+        url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackEnemyImage,
         text: "[" + charData.EnemyNumber + "] " + charData.EnemyName,
         wounds: charData.Wounds || 0,
         damage: charData.Damage || 0,
@@ -168,10 +169,12 @@ export function setupCharacterRefs() {
       if (master.type == "enemy")
         return master.text + " (" + master.damage + " dmg)";
       else
-        return master.text + " (" + master.wounds + " wounds)";
+        return master.text + (master.wounds >0 ? " (" + master.wounds + " wounds)" : "");
   }
 
   async function UpdateList(characterItems) {
+
+    console.log("Update character list");
 
     const masterIds = masterList.map((m) => m.id); // or m.id if you rename that
 
@@ -198,7 +201,6 @@ export function setupCharacterRefs() {
         (i) => i.metadata[`${PLUGIN_ID}/charID`] === master.id
       );
 
-      console.log("item: " + item);
       if (!item) {
 
         var safeURL = await getSafeImageURL(master.url);
@@ -236,24 +238,7 @@ export function setupCharacterRefs() {
     //Add new tokes
     if (newItemsToPlace.length > 0)
       OBR.scene.items.addItems(newItemsToPlace);
-
-    console.log("characterItems count " + characterItems.length);
+    
 
   }
-
-  //TODO: Only one check for changes in scene at startup?
-
-  // Subscribe to scene changes
-  /*
-  const onchangeRenderList = async (items) => {
-
-    const characterItems = items.filter(i => i.type === "IMAGE");
-    UpdateList(characterItems);
-  };
-  OBR.scene.items.onChange(onchangeRenderList);
-
-  */
-
-  // Trigger initial render
-  //OBR.scene.items.list().then(renderList);
 }

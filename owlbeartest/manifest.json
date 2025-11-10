@@ -1,9 +1,9 @@
 {
   "name": "Durfsheets integration",
   "version": "0.1.0",
-  "manifest_version": 1,
+  "manifest_version": 2,
   "author": "Tim Heessels",
-  "description": "Automatically adds, updates and removes icons for characters and enemies in Owlbear Rodeo from your Durfsheets party.",
+  "description": "Owlbear Rodeo plugin to connect Durfsheets.",
   "action": {
     "title": "Enemies",
     "icon": "/Durfsheets_Owlbear/owlbeartest/DurfSheetsLogo.png",

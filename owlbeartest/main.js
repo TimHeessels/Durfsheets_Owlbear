@@ -50,7 +50,24 @@ document.getElementById("setPartyID").addEventListener("click", () => {
   setupCharacterRefs();
 });
 
-export function setupCharacterRefs() {
+export async function setupCharacterRefs() {
+
+  OBR.player.onChange(async (player) => {
+    if (player.role === "GM") {
+      console.log("GM");
+      document.getElementById('GMPanel').style.display = "block";
+    } else {
+      console.log("NO GM");
+      document.getElementById('GMPanel').style.display = "none";
+    }
+  });
+
+  const user = await OBR.player.getRole();
+  if (user !== "GM") {
+    document.getElementById('GMPanel').style.display = "none";
+    document.getElementById('SyncedData').textContent = "Only the GM needs to set this up. Please only have one GM so the tool can sync without issues.";
+    return;
+  }
 
   if (currentPartyID == null || currentPartyID == "") {
     return;
@@ -131,6 +148,7 @@ export function setupCharacterRefs() {
         state: charData.characterState,
         light: charData.DepletableLightDiceActive + charData.PermanentLightDiceActive,
         state: charData.characterState,
+        characterType: charData.characterType,
         type: "player",
       }));
 
@@ -198,16 +216,30 @@ export function setupCharacterRefs() {
 
     console.log("Update character list");
 
-    const masterIds = masterList.map((m) => m.id);
-
-    const itemsToRemove = characterItems.filter(
-      (item) =>
-        item.metadata[`${PLUGIN_ID}/durfCharacter`] === true &&
-        !masterIds.includes(item.metadata[`${PLUGIN_ID}/charID`])
+    // Filter to only the items that are "durfCharacter"
+    const durfItems = characterItems.filter(
+      (item) => item.metadata[`${PLUGIN_ID}/durfCharacter`] === true
     );
-    if (itemsToRemove.length > 0) {
-      console.log("Removing outdated tokens:", itemsToRemove.map(i => i.id));
-      await OBR.scene.items.deleteItems(itemsToRemove.map(i => i.id));
+
+    // Map to track first occurrence of each ID
+    const seenIds = new Set();
+    const duplicatesToRemove = [];
+
+    for (const item of durfItems) {
+      const id = item.metadata[`${PLUGIN_ID}/charID`];
+      if (seenIds.has(id)) {
+        // Duplicate found → mark for deletion
+        duplicatesToRemove.push(item.id);
+      } else {
+        // First occurrence → keep
+        seenIds.add(id);
+      }
+    }
+
+    // Delete duplicates
+    if (duplicatesToRemove.length > 0) {
+      console.log("Removing duplicate tokens:", duplicatesToRemove);
+      await OBR.scene.items.deleteItems(duplicatesToRemove);
     }
 
     var newItemsToPlace = [];
@@ -220,9 +252,28 @@ export function setupCharacterRefs() {
       var safeURL = await getSafeImageURL(master.url);
 
       if (existingItem) {
-        await OBR.scene.items.updateItems([existingItem], (images) => {
-          images[0].text.plainText = GetCharacterText(master);
-          images[0].image.url = safeURL;
+        await OBR.scene.items.updateItems([existingItem], (items) => {
+
+          //Name
+          const currentName = items[0].text?.plainText || "";
+          const targetName = GetCharacterText(master);
+          if (currentName !== targetName) {
+            items[0].text.plainText = targetName;
+          }
+
+          //Image
+          const currentUrl = items[0].image?.url || "";
+          if (currentUrl !== safeURL) {
+            items[0].image.url = safeURL;
+          }
+
+          //Character type
+          const currentLayer = items[0].layer || "";
+          var charType = master.characterType == "Vehicle" ? "Mount" : "Character";
+          console.log("master.characterType : "+master.characterType  + ", charType: "+charType);
+          if (currentLayer !== charType) {
+            items[0].layer  = charType;
+          }
         });
       }
       else {

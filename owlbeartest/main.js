@@ -33,13 +33,6 @@ var masterList = [];
 const fallbackCharImage = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultCharImg.png";
 const fallbackEnemyImage = "https://timheessels.github.io/Durfsheets_Owlbear/owlbeartest/DefaultEnemyImg.png";
 
-let pendingUpdate = false;
-let latestImages = null;
-let latestMasterList = null;
-
-const TICK_INTERVAL = 500; // ms
-
-
 // Load saved partyID from localStorage
 let currentPartyID = localStorage.getItem("partyID");
 
@@ -59,8 +52,22 @@ document.getElementById("setPartyID").addEventListener("click", () => {
 
 export function setupCharacterRefs() {
 
-  if (currentPartyID == null || currentPartyID == "")
-    return;
+  if (currentPartyID == null || currentPartyID == "") {
+    currentPartyID = prompt("Enter the party-id for which you wish to display tokens. (You can also do this under the panel with the durfsheets icon)")
+    if (currentPartyID.length < 1)
+      return;
+  }
+
+  get(ref(db, `Parties/${currentPartyID}/PartyName`)).then((snapshot) => {
+    if (snapshot.exists()) {
+      document.getElementById('SyncedData').textContent = "The plugin is synced with the " + snapshot.val() + " party.";
+    } else {
+      document.getElementById('SyncedData').textContent = "The party-id you entered doesn't seem to have a valid party.";
+      return;
+    }
+  }).catch((error) => {
+    console.error(error);
+  });
 
   document.getElementById("partyID").value = currentPartyID;
 
@@ -70,21 +77,21 @@ export function setupCharacterRefs() {
     scheduleUpdate(images, masterList);
   };
 
-  setInterval(async () => {
-    if (!pendingUpdate) return;
-
-    // Execute the latest update
-    await UpdateList(latestImages, latestMasterList);
-
-    // Reset
-    pendingUpdate = false;
-  }, TICK_INTERVAL);
+  window.durfSync = window.durfSync || {};
 
   function scheduleUpdate(images, masterList) {
-    latestImages = images;
-    latestMasterList = masterList;
-    pendingUpdate = true;
+    window.durfSync.latestImages = images;
+    window.durfSync.latestMasterList = masterList;
+    window.durfSync.pending = true;
   }
+
+  if (window.durfSync.interval) clearInterval(window.durfSync.interval);
+  window.durfSync.interval = setInterval(async () => {
+
+    if (!window.durfSync.pending) return;
+    await UpdateList(window.durfSync.latestImages, window.durfSync.latestMasterList);
+    window.durfSync.pending = false;
+  }, 500);
 
   // Store the latest snapshot locally
   let playersList = [];
@@ -102,6 +109,8 @@ export function setupCharacterRefs() {
         url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackCharImage,
         text: charData.CharacterName,
         wounds: charData.Wounds || 0,
+        state: charData.characterState,
+        light: charData.DepletableLightDiceActive + charData.PermanentLightDiceActive,
         state: charData.characterState,
         type: "player",
       }));
@@ -123,6 +132,7 @@ export function setupCharacterRefs() {
         text: "[" + charData.EnemyNumber + "] " + charData.EnemyName,
         wounds: charData.Wounds || 0,
         damage: charData.Damage || 0,
+        light: 0,
         state: charData.IsDead ? "Dead" : "Active",
         type: "enemy",
       }));
@@ -153,21 +163,23 @@ export function setupCharacterRefs() {
 
   function GetCharacterText(master) {
     if (master.state == "Dead")
-      return master.text + " (DEAD)";
+      return master.text + "💀";
     else if (master.state == "Away")
       return master.text + " (Away)";
     else
       if (master.type == "enemy")
-        return master.text + " (" + master.damage + " dmg)";
+        return master.text + " 💥" + master.damage;
       else
-        return master.text + (master.wounds > 0 ? " (" + master.wounds + " wounds)" : "");
+        return master.text +
+       (master.wounds > 0 ? " 🩸 " + master.wounds + "" : "") +
+       (master.light > 0 ? " ☀️ " + master.light + "" : "");
   }
 
   async function UpdateList(characterItems) {
 
     console.log("Update character list");
 
-    const masterIds = masterList.map((m) => m.id); // or m.id if you rename that
+    const masterIds = masterList.map((m) => m.id);
 
     const itemsToRemove = characterItems.filter(
       (item) =>
@@ -179,24 +191,23 @@ export function setupCharacterRefs() {
       await OBR.scene.items.deleteItems(itemsToRemove.map(i => i.id));
     }
 
-    const dpi = await OBR.scene.grid.getDpi() * 2;
-
-    const viewportPos = await OBR.viewport.getPosition();
-    console.log("viewportPos: " + viewportPos + ", dpi: " + dpi);
-
     var newItemsToPlace = [];
     for (const master of masterList) {
       // Check if we already have an item for this ID
-      let item = characterItems.find(
+      let existingItem = characterItems.find(
         (i) => i.metadata[`${PLUGIN_ID}/charID`] === master.id
       );
 
-        var safeURL = await getSafeImageURL(master.url);
+      var safeURL = await getSafeImageURL(master.url);
 
-      if (!item) {
-
-
-        item = buildImage(
+      if (existingItem) {
+        await OBR.scene.items.updateItems([existingItem], (images) => {
+          images[0].text.plainText = GetCharacterText(master);
+          images[0].image.url = safeURL;
+        });
+      }
+      else {
+        var itemToAdd = buildImage(
           {
             height: 512,
             width: 512,
@@ -212,23 +223,24 @@ export function setupCharacterRefs() {
           })
           .textAlign("CENTER")
           .build();
-        newItemsToPlace.push(item);
-      }
-      else {
-        //Update existing images on the scene with the latest data
 
-        await OBR.scene.items.updateItems([item], (images) => {
-          console.log("images: " + images.length);
-          images[0].text.plainText = GetCharacterText(master);
-          images[0].image.url = safeURL;
-        });
+        newItemsToPlace.push(itemToAdd);
       }
     }
 
+    var startPosX = 0;
+    var startPosY = 0;
+
     //Add new tokes
-    if (newItemsToPlace.length > 0)
+    if (newItemsToPlace.length > 0) {
       OBR.scene.items.addItems(newItemsToPlace);
 
-
+      await OBR.scene.items.updateItems(newItemsToPlace, (images) => {
+        console.log("new images: " + images.length);
+        for (let index = 0; index < images.length; index++) {
+          images[index].position = { x: ((startPosX - 300) + Math.floor(Math.random() * 600)), y: ((startPosY - 300) + Math.floor(Math.random() * 600)) };
+        }
+      });
+    }
   }
 }

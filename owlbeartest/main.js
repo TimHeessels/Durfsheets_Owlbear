@@ -53,7 +53,7 @@ document.getElementById("setPartyID").addEventListener("click", () => {
 export function setupCharacterRefs() {
 
   if (currentPartyID == null || currentPartyID == "") {
-      return;
+    return;
   }
 
   get(ref(db, `Parties/${currentPartyID}/PartyName`)).then((snapshot) => {
@@ -76,20 +76,41 @@ export function setupCharacterRefs() {
   };
 
   window.durfSync = window.durfSync || {};
+  window.durfSync.latestImages = [];
+  window.durfSync.latestMasterList = [];
+  window.durfSync.pending = false;
+  window.durfSync.running = false;
+  window.durfSync.timeout = null;
 
   function scheduleUpdate(images, masterList) {
+    // Always keep the latest data
     window.durfSync.latestImages = images;
     window.durfSync.latestMasterList = masterList;
     window.durfSync.pending = true;
+
+    // Debounce: restart the timer each time a new update comes in
+    if (window.durfSync.timeout) clearTimeout(window.durfSync.timeout);
+    window.durfSync.timeout = setTimeout(runUpdateIfNeeded, 400);
   }
 
-  if (window.durfSync.interval) clearInterval(window.durfSync.interval);
-  window.durfSync.interval = setInterval(async () => {
+  async function runUpdateIfNeeded() {
+    // Don’t run if another update is still running
+    if (window.durfSync.running || !window.durfSync.pending) return;
 
-    if (!window.durfSync.pending) return;
-    await UpdateList(window.durfSync.latestImages, window.durfSync.latestMasterList);
+    window.durfSync.running = true;
     window.durfSync.pending = false;
-  }, 500);
+
+    try {
+      await UpdateList(window.durfSync.latestImages, window.durfSync.latestMasterList);
+    } catch (err) {
+      console.error("UpdateList failed:", err);
+    } finally {
+      window.durfSync.running = false;
+
+      // If something changed during the run, schedule again immediately
+      if (window.durfSync.pending) runUpdateIfNeeded();
+    }
+  }
 
   // Store the latest snapshot locally
   let playersList = [];
@@ -169,8 +190,8 @@ export function setupCharacterRefs() {
         return master.text + " 💥" + master.damage;
       else
         return master.text +
-       (master.wounds > 0 ? " 🩸 " + master.wounds + "" : "") +
-       (master.light > 0 ? " ☀️ " + master.light + "" : "");
+          (master.wounds > 0 ? " 🩸 " + master.wounds + "" : "") +
+          (master.light > 0 ? " ☀️ " + master.light + "" : "");
   }
 
   async function UpdateList(characterItems) {

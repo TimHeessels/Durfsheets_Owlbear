@@ -258,6 +258,7 @@ export function setupCharacterRefs() {
         console.log("new images: " + images.length);
         for (let index = 0; index < images.length; index++) {
           images[index].position = { x: ((startPosX - 300) + Math.floor(Math.random() * 600)), y: ((startPosY - 300) + Math.floor(Math.random() * 600)) };
+          images[index].layer = "CHARACTER";
         }
       });
     }

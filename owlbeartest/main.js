@@ -53,8 +53,6 @@ document.getElementById("setPartyID").addEventListener("click", () => {
 export function setupCharacterRefs() {
 
   if (currentPartyID == null || currentPartyID == "") {
-    currentPartyID = prompt("Enter the party-id for which you wish to display tokens. (You can also do this under the panel with the durfsheets icon)")
-    if (currentPartyID.length < 1)
       return;
   }
 

@@ -70,6 +70,10 @@ export async function setupCharacterRefs() {
   }
 
   if (currentPartyID == null || currentPartyID == "") {
+    if (user == "GM")
+    {
+      alert("Please fill in the 'party id' in the Durfsheets plugin.");
+    }
     return;
   }
 
@@ -139,7 +143,7 @@ export async function setupCharacterRefs() {
     const dataPlayers = snapshotPlayers.val() || {};
 
     playersList = Object.entries(dataPlayers)
-      .filter(([_, charData]) => charData.characterType !== "Storage")
+      .filter(([_, charData]) => charData?.characterType !== "Storage")
       .map(([charID, charData]) => ({
         id: charID,
         url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackCharImage,
@@ -163,7 +167,7 @@ export async function setupCharacterRefs() {
     const dataEnemies = snapshotEnemies.val() || {};
 
     enemiesList = Object.entries(dataEnemies)
-      .filter(([_, charData]) => charData.VisibleToPlayers)
+      .filter(([_, charData]) => charData?.VisibleToPlayers === true)
       .map(([charID, charData]) => ({
         id: charID,
         url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackEnemyImage,

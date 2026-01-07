@@ -167,7 +167,7 @@ export async function setupCharacterRefs() {
     const dataEnemies = snapshotEnemies.val() || {};
 
     enemiesList = Object.entries(dataEnemies)
-      .filter(([_, charData]) => charData?.VisibleToPlayers === true)
+      .filter(([_, charData]) => charData?.VisibleToPlayer === true)
       .map(([charID, charData]) => ({
         id: charID,
         url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackEnemyImage,

@@ -213,6 +213,8 @@ export async function setupCharacterRefs() {
           (master.light > 0 ? " ☀️ " + master.light + "" : "");
   }
 
+  const updateMap = new Map();
+
   async function UpdateList(characterItems) {
 
     console.log("Update character list");
@@ -243,6 +245,8 @@ export async function setupCharacterRefs() {
       await OBR.scene.items.deleteItems(duplicatesToRemove);
     }
 
+    //Check which need to be updated or added
+    updateMap = new Map();
     var newItemsToPlace = [];
     for (const master of masterList) {
       // Check if we already have an item for this ID
@@ -253,34 +257,12 @@ export async function setupCharacterRefs() {
       var safeURL = await getSafeImageURL(master.url);
 
       if (existingItem) {
-
-        console.log("existingItem: "+ existingItem.length);
-
-        await OBR.scene.items.updateItems([existingItem], (items) => {
-
-          //Name
-          const currentName = items[0].text?.plainText || "";
-          const targetName = GetCharacterText(master);
-          if (currentName !== targetName) {
-            items[0].text.plainText = targetName;
-          }
-
-          //Image
-          const currentUrl = items[0].image?.url || "";
-          if (currentUrl !== safeURL) {
-            items[0].image.url = safeURL;
-          }
-
-          //Character type
-          const currentLayer = items[0].layer || "";
-          var charType = master.characterType == "Vehicle" ? "Mount" : "Character";
-          console.log("master.characterType : "+master.characterType  + ", charType: "+charType);
-          if (currentLayer !== charType) {
-            items[0].layer  = charType;
-          }
+        updateMap.set(existingItem.id, {
+          name: GetCharacterText(master),
+          url: safeURL,
+          layer: master.characterType === "Vehicle" ? "Mount" : "Character",
         });
-        
-        console.log("Update items complete.");
+
       }
       else {
         var itemToAdd = buildImage(
@@ -304,13 +286,34 @@ export async function setupCharacterRefs() {
       }
     }
 
-    var startPosX = 0;
-    var startPosY = 0;
+    //Update all existing at once
+    const ids = Array.from(updateMap.keys());
+    if (ids.length > 0) {
+      await OBR.scene.items.updateItems(ids, (items) => {
+        for (const item of items) {
+          const target = updateMap.get(item.id);
+          if (!target) continue;
 
+          if (item.text?.plainText !== target.name) {
+            item.text.plainText = target.name;
+          }
+
+          if (item.image?.url !== target.url) {
+            item.image.url = target.url;
+          }
+
+          if (item.layer !== target.layer) {
+            item.layer = target.layer;
+          }
+        }
+      });
+    }
 
     //Add new tokes
+    var startPosX = 0;
+    var startPosY = 0;
     if (newItemsToPlace.length > 0) {
-        console.log("Adding " + newItemsToPlace.length + " new tokens");
+      console.log("Adding " + newItemsToPlace.length + " new tokens");
       OBR.scene.items.addItems(newItemsToPlace);
 
       await OBR.scene.items.updateItems(newItemsToPlace, (images) => {
@@ -320,8 +323,8 @@ export async function setupCharacterRefs() {
           images[index].layer = "CHARACTER";
         }
       });
-            
-        console.log("Finished adding tokens");
+
+      console.log("Finished adding tokens");
     }
   }
 }

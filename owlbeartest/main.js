@@ -107,7 +107,7 @@ export async function setupCharacterRefs() {
 
     // Debounce: restart the timer each time a new update comes in
     if (window.durfSync.timeout) clearTimeout(window.durfSync.timeout);
-    window.durfSync.timeout = setTimeout(runUpdateIfNeeded, 400);
+    window.durfSync.timeout = setTimeout(runUpdateIfNeeded, 1000);
   }
 
   async function runUpdateIfNeeded() {
@@ -163,6 +163,7 @@ export async function setupCharacterRefs() {
     const dataEnemies = snapshotEnemies.val() || {};
 
     enemiesList = Object.entries(dataEnemies)
+      .filter(([_, charData]) => charData.VisibleToPlayers)
       .map(([charID, charData]) => ({
         id: charID,
         url: charData.CharacterImageLink?.token?.url ? charData.CharacterImageLink?.token?.url : fallbackEnemyImage,
@@ -252,6 +253,9 @@ export async function setupCharacterRefs() {
       var safeURL = await getSafeImageURL(master.url);
 
       if (existingItem) {
+
+        console.log("existingItem: "+ existingItem.length);
+
         await OBR.scene.items.updateItems([existingItem], (items) => {
 
           //Name
@@ -275,6 +279,8 @@ export async function setupCharacterRefs() {
             items[0].layer  = charType;
           }
         });
+        
+        console.log("Update items complete.");
       }
       else {
         var itemToAdd = buildImage(
@@ -301,8 +307,10 @@ export async function setupCharacterRefs() {
     var startPosX = 0;
     var startPosY = 0;
 
+
     //Add new tokes
     if (newItemsToPlace.length > 0) {
+        console.log("Adding " + newItemsToPlace.length + " new tokens");
       OBR.scene.items.addItems(newItemsToPlace);
 
       await OBR.scene.items.updateItems(newItemsToPlace, (images) => {
@@ -312,6 +320,8 @@ export async function setupCharacterRefs() {
           images[index].layer = "CHARACTER";
         }
       });
+            
+        console.log("Finished adding tokens");
     }
   }
 }

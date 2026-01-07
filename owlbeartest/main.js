@@ -246,7 +246,7 @@ export async function setupCharacterRefs() {
     }
 
     //Check which need to be updated or added
-    updateMap = new Map();
+    updateMap.clear();
     var newItemsToPlace = [];
     for (const master of masterList) {
       // Check if we already have an item for this ID

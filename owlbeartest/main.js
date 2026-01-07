@@ -213,7 +213,7 @@ export async function setupCharacterRefs() {
           (master.light > 0 ? " ☀️ " + master.light + "" : "");
   }
 
-  const updateMap = new Map();
+  let updateMap = new Map();
 
   async function UpdateList(characterItems) {
 

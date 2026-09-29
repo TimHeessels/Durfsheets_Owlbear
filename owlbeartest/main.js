@@ -209,8 +209,8 @@ async function setupCharacterRefs() {
   firebaseUnsubs.push(onValue(ref(db, `Parties/${currentPartyID}/ActiveEnemies`), (snapshotEnemies) => {
     const dataEnemies = snapshotEnemies.val() || {};
 
+    // Enemies hidden from players are kept so their tokens get hidden instead of deleted
     enemiesList = Object.entries(dataEnemies)
-      .filter(([_, charData]) => charData?.VisibleToPlayer === true)
       .map(([charID, charData]) => ({
         id: charID,
         url: charData.CharacterImageLink?.token?.url || fallbackEnemyImage,
@@ -219,6 +219,7 @@ async function setupCharacterRefs() {
         damage: charData.Damage || 0,
         light: 0,
         state: charData.IsDead ? "Dead" : "Active",
+        hidden: charData.VisibleToPlayer !== true,
         type: "enemy",
       }));
 
@@ -251,7 +252,7 @@ async function runUpdateIfNeeded() {
       await UpdateList(images, [...playersList, ...enemiesList]);
 
       statusText.textContent = "The plugin is synced with the " + partyName + " party: " +
-        playersList.length + " characters, " + enemiesList.length + " visible enemies. " +
+        playersList.length + " characters, " + enemiesList.filter((enemy) => !enemy.hidden).length + " visible enemies. " +
         "Last update " + new Date().toLocaleTimeString() + ".";
     }
   } catch (err) {
@@ -352,17 +353,20 @@ async function UpdateList(characterItems, masterList) {
         name: GetCharacterText(master),
         url: safeURLs[index],
         layer: GetLayer(master),
+        hide: master.hidden === true,
       });
       itemsByCharID.delete(master.id);
     }
-    else {
+    else if (!master.hidden) {
       mastersToAdd.push({ master, url: safeURLs[index] });
     }
   });
 
-  // Whatever is left is no longer in DurfSheets (deleted or hidden from players)
-  for (const item of itemsByCharID.values()) {
-    updateMap.set(item.id, { hide: true });
+  // Whatever is left was deleted in DurfSheets or belongs to another party
+  const staleItems = Array.from(itemsByCharID.values(), (item) => item.id);
+  if (staleItems.length > 0) {
+    console.log("Removing tokens no longer in the party:", staleItems);
+    await OBR.scene.items.deleteItems(staleItems);
   }
 
   //Update all existing at once
@@ -379,11 +383,9 @@ async function UpdateList(characterItems, masterList) {
             item.visible = false;
             item.metadata[HIDDEN_KEY] = true;
           }
-          continue;
         }
-
-        // Unhide tokens we hid earlier, but leave tokens the GM hid alone
-        if (item.metadata[HIDDEN_KEY]) {
+        else if (item.metadata[HIDDEN_KEY]) {
+          // Unhide tokens we hid earlier, but leave tokens the GM hid alone
           item.visible = true;
           delete item.metadata[HIDDEN_KEY];
         }

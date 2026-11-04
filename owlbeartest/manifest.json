@@ -1,9 +1,10 @@
 {
   "name": "Durfsheets integration",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "manifest_version": 2,
   "author": "Tim Heessels",
   "description": "Owlbear Rodeo plugin to connect Durfsheets.",
+  "background_url": "/Durfsheets_Owlbear/owlbeartest/background.html",
   "action": {
     "title": "Durfsheets",
     "icon": "/Durfsheets_Owlbear/owlbeartest/DurfSheetsLogo.png",

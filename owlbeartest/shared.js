@@ -1,0 +1,90 @@
+// Code shared by the popover (main.js) and the background page (background.js).
+// Keep this file free of browser and OBR imports so it can run in the Node tests.
+
+// Don't change: existing tokens store their metadata under this ID
+export const PLUGIN_ID = "com.th.enemies";
+export const PARTY_KEY = `${PLUGIN_ID}/partyID`;
+export const CHAR_ID_KEY = `${PLUGIN_ID}/charID`;
+export const DURF_KEY = `${PLUGIN_ID}/durfCharacter`;
+export const HIDDEN_KEY = `${PLUGIN_ID}/hiddenBySync`;
+export const SYNC_ENABLED_KEY = `${PLUGIN_ID}/syncEnabled`;
+
+// Broadcast channels between the popover and the background page
+export const STATUS_CHANNEL = `${PLUGIN_ID}/status`;
+export const COMMAND_CHANNEL = `${PLUGIN_ID}/command`;
+export const LOCAL_ONLY = { destination: "LOCAL" };
+
+// Firebase paths can't contain these, and "/" would point at a different node
+export function isValidPartyID(id) {
+  return typeof id === "string" && id.length > 0 && !/[.#$[\]/]/.test(id);
+}
+
+// A missing value means enabled, so existing scenes keep syncing
+export function isSceneSyncEnabled(sceneMetadata) {
+  return sceneMetadata[SYNC_ENABLED_KEY] !== false;
+}
+
+// Only one GM client may sync: the one with the lowest connection ID.
+// Works whether or not `players` includes this client.
+export function isActiveSyncer(myConnectionId, players) {
+  return players
+    .filter((player) => player.role === "GM")
+    .every((player) => player.connectionId >= myConnectionId);
+}
+
+export function mapPlayers(data) {
+  return Object.entries(data || {})
+    .filter(([_, charData]) => charData && charData.characterType !== "Storage")
+    .map(([charID, charData]) => ({
+      id: charID,
+      url: charData.CharacterImageLink?.token?.url || null,
+      text: charData.CharacterName || "Unnamed character",
+      wounds: charData.Wounds || 0,
+      light: (charData.DepletableLightDiceActive || 0) + (charData.PermanentLightDiceActive || 0),
+      state: charData.characterState,
+      characterType: charData.characterType,
+      type: "player",
+    }));
+}
+
+// Enemies hidden from players are kept so their tokens get hidden instead of deleted
+export function mapEnemies(data) {
+  return Object.entries(data || {})
+    .filter(([_, charData]) => charData)
+    .map(([charID, charData]) => {
+      const hasNumber = charData.EnemyNumber !== undefined && charData.EnemyNumber !== null;
+      return {
+        id: charID,
+        url: charData.CharacterImageLink?.token?.url || null,
+        text: (hasNumber ? "[" + charData.EnemyNumber + "] " : "") + (charData.EnemyName || "Unnamed enemy"),
+        damage: charData.Damage || 0,
+        light: 0,
+        state: charData.IsDead ? "Dead" : "Active",
+        hidden: charData.VisibleToPlayer !== true,
+        type: "enemy",
+      };
+    });
+}
+
+export function GetCharacterText(master) {
+  if (master.state == "Dead")
+    return master.text + "💀";
+  else if (master.state == "Away")
+    return master.text + " (Away)";
+  else
+    if (master.type == "enemy")
+      return master.text + " 💥" + master.damage;
+    else
+      return master.text +
+        (master.wounds > 0 ? " 🩸 " + master.wounds + "" : "") +
+        (master.light > 0 ? " ☀️ " + master.light + "" : "");
+}
+
+// Fit the longest side of an image in one grid cell, keeping its proportions.
+// The vertical offset matches the original 512px token (280 / 512).
+export function getTokenGrid(width, height) {
+  return {
+    dpi: Math.max(width, height),
+    offset: { x: width / 2, y: height * (280 / 512) },
+  };
+}

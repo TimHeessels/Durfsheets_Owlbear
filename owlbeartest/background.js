@@ -1,9 +1,9 @@
-import OBR, { buildImage, isImage } from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3.1.0/+esm";
+import OBR, { buildImage, buildLabel, buildShape, isImage } from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3.1.0/+esm";
 import { db, ref, onValue, get } from "./firebase.js";
 import {
-  PARTY_KEY, CHAR_ID_KEY, DURF_KEY, HIDDEN_KEY,
+  PARTY_KEY, CHAR_ID_KEY, DURF_KEY, HIDDEN_KEY, STATUS_KEY,
   STATUS_CHANNEL, COMMAND_CHANNEL, LOCAL_ONLY,
-  isSceneSyncEnabled, isActiveSyncer, mapPlayers, mapEnemies, GetCharacterText, getTokenGrid,
+  isSceneSyncEnabled, isActiveSyncer, mapPlayers, mapEnemies, GetStatusMarkers, getTokenGeometry, getTokenGrid,
 } from "./shared.js";
 
 // Runs for as long as the room is open, whether or not the popover is.
@@ -17,6 +17,15 @@ const fallbackEnemyImage = {
 
 // Broken image URLs are checked again after this long, or on "Sync now"
 const IMAGE_RETRY_MS = 60 * 1000;
+
+// Which side of the token each badge sits on, and its background colour
+const BADGE_STYLES = {
+  wounds: { side: -1, color: "#B3261E" },
+  light: { side: 1, color: "#A16207" },
+  damage: { side: 1, color: "#C2410C" },
+  dead: { side: 1, color: "#1F1F24" },
+  away: { side: 1, color: "#475569" },
+};
 
 let currentPartyID = null;
 let partyName = null;
@@ -364,6 +373,124 @@ async function getViewportCenter() {
   return OBR.viewport.inverseTransformPoint({ x: width / 2, y: height / 2 });
 }
 
+function buildBadge(marker, center, size, sceneDpi) {
+  const style = BADGE_STYLES[marker.kind];
+  const fontSize = sceneDpi * 0.2;
+  const padding = sceneDpi * 0.05;
+  const lineHeight = 1.2;
+
+  // Badges are sized per grid cell, so scale them up along with larger tokens
+  const scale = size / sceneDpi;
+  const height = (fontSize * lineHeight + padding * 2) * scale;
+
+  return buildLabel()
+    .plainText(marker.text)
+    .fontSize(fontSize)
+    .fontWeight(700)
+    .lineHeight(lineHeight)
+    .padding(padding)
+    .backgroundColor(style.color)
+    .backgroundOpacity(0.95)
+    .cornerRadius(fontSize)
+    .pointerWidth(0)
+    .pointerHeight(0)
+    .scale({ x: scale, y: scale })
+    // A label's position is the bottom centre of the pill, so shift down to centre it on the rim
+    .position({
+      x: center.x + style.side * size * 0.45,
+      y: center.y + height / 2,
+    });
+}
+
+function buildStatusMarker(marker, token, master, sceneDpi, zIndex) {
+  const { center, size } = getTokenGeometry(token, sceneDpi);
+
+  const builder = marker.kind === "overlay"
+    ? buildShape()
+      .shapeType("CIRCLE")
+      .width(size)
+      .height(size)
+      .fillColor("#000000")
+      .fillOpacity(0.55)
+      .strokeOpacity(0)
+      .strokeWidth(0)
+      .position(center)
+      .zIndex(zIndex)
+    : buildBadge(marker, center, size, sceneDpi).zIndex(zIndex + 1);
+
+  return builder
+    .name("Durfsheets status")
+    .attachedTo(token.id)
+    .layer("ATTACHMENT")
+    .locked(true)
+    .disableHit(true)
+    .disableAttachmentBehavior(["ROTATION"])
+    .visible(!master.hidden)
+    .metadata({ [STATUS_KEY]: marker.kind })
+    .build();
+}
+
+// Bring the markers attached to the tokens in line with the current character state
+async function SyncStatusMarkers(tokens) {
+  const [existing, sceneDpi] = await Promise.all([
+    OBR.scene.items.getItems((item) => item.metadata[STATUS_KEY] !== undefined),
+    OBR.scene.grid.getDpi(),
+  ]);
+
+  const existingByKey = new Map();
+  const toDelete = [];
+  for (const item of existing) {
+    const key = item.attachedTo + ":" + item.metadata[STATUS_KEY];
+    if (existingByKey.has(key)) toDelete.push(item.id);
+    else existingByKey.set(key, item);
+  }
+
+  const zIndex = Date.now();
+  const toUpdate = new Map();
+  const toAdd = [];
+
+  for (const { token, master } of tokens) {
+    for (const marker of GetStatusMarkers(master)) {
+      const key = token.id + ":" + marker.kind;
+      const item = existingByKey.get(key);
+      existingByKey.delete(key);
+
+      if (!item) {
+        toAdd.push(buildStatusMarker(marker, token, master, sceneDpi, zIndex));
+        continue;
+      }
+
+      const visible = !master.hidden;
+      if (item.visible !== visible || (marker.text && item.text?.plainText !== marker.text)) {
+        toUpdate.set(item.id, { visible, text: marker.text });
+      }
+    }
+  }
+
+  // Whatever is left is no longer wanted, or belongs to a token that's gone
+  toDelete.push(...Array.from(existingByKey.values(), (item) => item.id));
+
+  if (toDelete.length > 0) {
+    await OBR.scene.items.deleteItems(toDelete);
+  }
+
+  if (toUpdate.size > 0) {
+    await OBR.scene.items.updateItems(Array.from(toUpdate.keys()), (items) => {
+      for (const item of items) {
+        const target = toUpdate.get(item.id);
+        if (!target) continue;
+
+        item.visible = target.visible;
+        if (target.text) item.text.plainText = target.text;
+      }
+    });
+  }
+
+  if (toAdd.length > 0) {
+    await OBR.scene.items.addItems(toAdd);
+  }
+}
+
 async function UpdateList(characterItems, masterList, run) {
 
   console.log("Update character list");
@@ -402,18 +529,20 @@ async function UpdateList(characterItems, masterList, run) {
   //Check which need to be updated or added
   const updateMap = new Map();
   const mastersToAdd = [];
+  const tokens = [];
   masterList.forEach((master, index) => {
     const existingItem = itemsByCharID.get(master.id);
 
     if (existingItem) {
       updateMap.set(existingItem.id, {
-        name: GetCharacterText(master),
+        name: master.text,
         // null keeps the current art, so a failed check doesn't replace it
         image: imageInfos[index],
         layer: GetLayer(master),
         hide: master.hidden === true,
       });
       itemsByCharID.delete(master.id);
+      tokens.push({ token: existingItem, master });
     }
     else if (!master.hidden) {
       mastersToAdd.push({ master, image: imageInfos[index] || getFallbackImage(master) });
@@ -490,7 +619,7 @@ async function UpdateList(characterItems, masterList, run) {
           y: center.y + (Math.random() - 0.5) * spread,
         })
         .layer(GetLayer(master))
-        .plainText(GetCharacterText(master))
+        .plainText(master.text)
         .metadata({
           [CHAR_ID_KEY]: master.id,
           [DURF_KEY]: true,
@@ -502,5 +631,11 @@ async function UpdateList(characterItems, masterList, run) {
     console.log("Adding " + newItemsToPlace.length + " new tokens");
     await OBR.scene.items.addItems(newItemsToPlace);
     console.log("Finished adding tokens");
+
+    newItemsToPlace.forEach((token, index) => {
+      tokens.push({ token, master: mastersToAdd[index].master });
+    });
   }
+
+  await SyncStatusMarkers(tokens);
 }

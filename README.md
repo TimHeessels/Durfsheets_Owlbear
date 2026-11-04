@@ -25,9 +25,11 @@ Only a GM needs to do this. The party ID is saved in the room, so it applies on 
 
 | In DurfSheets | On the token |
 | --- | --- |
-| Character name, wounds, light dice | Name label, for example `Ann 🩸 2 ☀️ 1` |
-| Dead or away characters | `💀` or `(Away)` on the label |
-| Enemy number, name, damage | Name label, for example `[1] Rat 💥3` |
+| Character name | Name label |
+| Wounds, light dice | `🩸 2` and `☀️ 1` badges on the edge of the token |
+| Dead or away characters | Token darkened, with a `💀` or `💤` badge |
+| Enemy number, name | Name label, for example `[1] Rat` |
+| Enemy damage | `💥 3` badge on the edge of the token |
 | Token image | Token art, or a default image if it can't be loaded |
 | Vehicle characters | Placed on the mount layer |
 | Enemy visible to players | Token shown or hidden |

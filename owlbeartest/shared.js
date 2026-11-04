@@ -8,6 +8,7 @@ export const CHAR_ID_KEY = `${PLUGIN_ID}/charID`;
 export const DURF_KEY = `${PLUGIN_ID}/durfCharacter`;
 export const HIDDEN_KEY = `${PLUGIN_ID}/hiddenBySync`;
 export const SYNC_ENABLED_KEY = `${PLUGIN_ID}/syncEnabled`;
+export const STATUS_KEY = `${PLUGIN_ID}/statusMarker`;
 
 // Broadcast channels between the popover and the background page
 export const STATUS_CHANNEL = `${PLUGIN_ID}/status`;
@@ -66,18 +67,34 @@ export function mapEnemies(data) {
     });
 }
 
-export function GetCharacterText(master) {
+// The status markers a token should have: "overlay" is the dark circle, the rest are badges
+export function GetStatusMarkers(master) {
   if (master.state == "Dead")
-    return master.text + "💀";
-  else if (master.state == "Away")
-    return master.text + " (Away)";
-  else
-    if (master.type == "enemy")
-      return master.text + " 💥" + master.damage;
-    else
-      return master.text +
-        (master.wounds > 0 ? " 🩸 " + master.wounds + "" : "") +
-        (master.light > 0 ? " ☀️ " + master.light + "" : "");
+    return [{ kind: "overlay" }, { kind: "dead", text: "💀" }];
+  if (master.state == "Away")
+    return [{ kind: "overlay" }, { kind: "away", text: "💤" }];
+  if (master.type == "enemy")
+    return [{ kind: "damage", text: "💥 " + master.damage }];
+
+  const markers = [];
+  if (master.wounds > 0) markers.push({ kind: "wounds", text: "🩸 " + master.wounds });
+  if (master.light > 0) markers.push({ kind: "light", text: "☀️ " + master.light });
+  return markers;
+}
+
+// Centre and size (longest side) of a token's art in scene coordinates. Calculated from
+// the item so it also works for tokens that were just built. Token rotation is ignored.
+export function getTokenGeometry(token, sceneDpi) {
+  const scaleX = (sceneDpi / token.grid.dpi) * token.scale.x;
+  const scaleY = (sceneDpi / token.grid.dpi) * token.scale.y;
+
+  return {
+    center: {
+      x: token.position.x + (token.image.width / 2 - token.grid.offset.x) * scaleX,
+      y: token.position.y + (token.image.height / 2 - token.grid.offset.y) * scaleY,
+    },
+    size: Math.max(token.image.width * Math.abs(scaleX), token.image.height * Math.abs(scaleY)),
+  };
 }
 
 // Fit the longest side of an image in one grid cell, keeping its proportions.

@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
-  SYNC_ENABLED_KEY, GetCharacterText, getTokenGrid, isActiveSyncer,
+  SYNC_ENABLED_KEY, GetStatusMarkers, getTokenGeometry, getTokenGrid, isActiveSyncer,
   isSceneSyncEnabled, isValidPartyID, mapEnemies, mapPlayers,
 } from "../owlbeartest/shared.js";
 
@@ -64,12 +64,51 @@ test("mapEnemies keeps hidden enemies and hides by default", () => {
   assert.equal(enemies[1].hidden, true);
 });
 
-test("GetCharacterText shows state, wounds and damage", () => {
-  assert.equal(GetCharacterText({ text: "Ann", state: "Dead", type: "player" }), "Ann💀");
-  assert.equal(GetCharacterText({ text: "Ann", state: "Away", type: "player" }), "Ann (Away)");
-  assert.equal(GetCharacterText({ text: "[1] Rat", state: "Active", damage: 3, type: "enemy" }), "[1] Rat 💥3");
-  assert.equal(GetCharacterText({ text: "Ann", wounds: 0, light: 0, type: "player" }), "Ann");
-  assert.equal(GetCharacterText({ text: "Ann", wounds: 2, light: 1, type: "player" }), "Ann 🩸 2 ☀️ 1");
+test("GetStatusMarkers shows state, wounds, light and damage", () => {
+  assert.deepEqual(GetStatusMarkers({ state: "Dead", wounds: 2, type: "player" }), [
+    { kind: "overlay" }, { kind: "dead", text: "💀" },
+  ]);
+  assert.deepEqual(GetStatusMarkers({ state: "Dead", damage: 3, type: "enemy" }), [
+    { kind: "overlay" }, { kind: "dead", text: "💀" },
+  ]);
+  assert.deepEqual(GetStatusMarkers({ state: "Away", type: "player" }), [
+    { kind: "overlay" }, { kind: "away", text: "💤" },
+  ]);
+  assert.deepEqual(GetStatusMarkers({ state: "Active", damage: 0, type: "enemy" }), [
+    { kind: "damage", text: "💥 0" },
+  ]);
+  assert.deepEqual(GetStatusMarkers({ wounds: 0, light: 0, type: "player" }), []);
+  assert.deepEqual(GetStatusMarkers({ wounds: 2, light: 1, type: "player" }), [
+    { kind: "wounds", text: "🩸 2" }, { kind: "light", text: "☀️ 1" },
+  ]);
+});
+
+test("getTokenGeometry finds the art's centre from the token offset", () => {
+  const token = {
+    position: { x: 100, y: 100 },
+    scale: { x: 1, y: 1 },
+    image: { width: 512, height: 512 },
+    grid: getTokenGrid(512, 512),
+  };
+
+  // 150 DPI scene: the 512px image is one 150px cell, offset 24px below its centre
+  const { center, size } = getTokenGeometry(token, 150);
+  assert.equal(size, 150);
+  assert.equal(center.x, 100);
+  assert.equal(center.y, 100 - 24 * (150 / 512));
+});
+
+test("getTokenGeometry follows token scale and non-square art", () => {
+  const token = {
+    position: { x: 0, y: 0 },
+    scale: { x: 2, y: 2 },
+    image: { width: 1000, height: 500 },
+    grid: getTokenGrid(1000, 500),
+  };
+
+  assert.equal(getTokenGeometry(token, 150).size, 300);
+  // A flipped token keeps its size
+  assert.equal(getTokenGeometry({ ...token, scale: { x: -2, y: 2 } }, 150).size, 300);
 });
 
 test("getTokenGrid matches the original 512px token", () => {

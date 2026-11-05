@@ -19,15 +19,17 @@ const fallbackEnemyImage = {
 const IMAGE_RETRY_MS = 60 * 1000;
 
 // Bump when the look of the markers changes, so the ones already in a scene get rebuilt
-const STATUS_VERSION = 2;
+const STATUS_VERSION = 3;
 
-// Which top corner of the token each badge sits on, and its background colour
+// Each badge has its own spot on the token, so they can't overlap and a spot always means
+// the same thing. x and y are the badge's centre relative to the token's, as a fraction of
+// its size. The bottom of the token is left free for the name label.
 const BADGE_STYLES = {
-  wounds: { side: -1, color: "#B3261E" },
-  light: { side: 1, color: "#A16207" },
-  damage: { side: 1, color: "#C2410C" },
-  dead: { side: 1, color: "#1F1F24" },
-  away: { side: 1, color: "#475569" },
+  wounds: { x: -0.35, y: -0.35, color: "#B3261E" },
+  dead: { x: 0, y: -0.5, color: "#1F1F24" },
+  light: { x: 0.35, y: -0.35, color: "#A16207" },
+  damage: { x: -0.5, y: 0, color: "#C2410C" },
+  away: { x: 0.5, y: 0, color: "#475569" },
 };
 
 let currentPartyID = null;
@@ -401,10 +403,10 @@ function buildBadge(marker, center, size, sceneDpi) {
     .minViewScale(1)
     .maxViewScale(1)
     .scale({ x: scale, y: scale })
-    // A label's position is the bottom centre of the pill, so shift down to centre it on the corner
+    // A label's position is the bottom centre of the pill, so shift down to centre it on its spot
     .position({
-      x: center.x + style.side * size * 0.35,
-      y: center.y - size * 0.35 + height / 2,
+      x: center.x + style.x * size,
+      y: center.y + style.y * size + height / 2,
     });
 }
 

@@ -1,7 +1,7 @@
 import OBR, { buildImage, buildLabel, buildShape, isImage } from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3.1.0/+esm";
 import { db, ref, onValue, get } from "./firebase.js";
 import {
-  PARTY_KEY, CHAR_ID_KEY, DURF_KEY, HIDDEN_KEY, STATUS_KEY,
+  PARTY_KEY, CHAR_ID_KEY, DURF_KEY, HIDDEN_KEY, STATUS_KEY, STATUS_VERSION_KEY,
   STATUS_CHANNEL, COMMAND_CHANNEL, LOCAL_ONLY,
   isSceneSyncEnabled, isActiveSyncer, mapPlayers, mapEnemies, GetStatusMarkers, getTokenGeometry, getTokenGrid,
 } from "./shared.js";
@@ -18,7 +18,10 @@ const fallbackEnemyImage = {
 // Broken image URLs are checked again after this long, or on "Sync now"
 const IMAGE_RETRY_MS = 60 * 1000;
 
-// Which side of the token each badge sits on, and its background colour
+// Bump when the look of the markers changes, so the ones already in a scene get rebuilt
+const STATUS_VERSION = 2;
+
+// Which top corner of the token each badge sits on, and its background colour
 const BADGE_STYLES = {
   wounds: { side: -1, color: "#B3261E" },
   light: { side: 1, color: "#A16207" },
@@ -375,8 +378,8 @@ async function getViewportCenter() {
 
 function buildBadge(marker, center, size, sceneDpi) {
   const style = BADGE_STYLES[marker.kind];
-  const fontSize = sceneDpi * 0.2;
-  const padding = sceneDpi * 0.05;
+  const fontSize = sceneDpi * 0.13;
+  const padding = sceneDpi * 0.03;
   const lineHeight = 1.2;
 
   // Badges are sized per grid cell, so scale them up along with larger tokens
@@ -394,11 +397,14 @@ function buildBadge(marker, center, size, sceneDpi) {
     .cornerRadius(fontSize)
     .pointerWidth(0)
     .pointerHeight(0)
+    // Keep the badge in proportion to the token at every zoom level
+    .minViewScale(1)
+    .maxViewScale(1)
     .scale({ x: scale, y: scale })
-    // A label's position is the bottom centre of the pill, so shift down to centre it on the rim
+    // A label's position is the bottom centre of the pill, so shift down to centre it on the corner
     .position({
-      x: center.x + style.side * size * 0.45,
-      y: center.y + height / 2,
+      x: center.x + style.side * size * 0.35,
+      y: center.y - size * 0.35 + height / 2,
     });
 }
 
@@ -426,7 +432,7 @@ function buildStatusMarker(marker, token, master, sceneDpi, zIndex) {
     .disableHit(true)
     .disableAttachmentBehavior(["ROTATION"])
     .visible(!master.hidden)
-    .metadata({ [STATUS_KEY]: marker.kind })
+    .metadata({ [STATUS_KEY]: marker.kind, [STATUS_VERSION_KEY]: STATUS_VERSION })
     .build();
 }
 
@@ -441,7 +447,7 @@ async function SyncStatusMarkers(tokens) {
   const toDelete = [];
   for (const item of existing) {
     const key = item.attachedTo + ":" + item.metadata[STATUS_KEY];
-    if (existingByKey.has(key)) toDelete.push(item.id);
+    if (existingByKey.has(key) || item.metadata[STATUS_VERSION_KEY] !== STATUS_VERSION) toDelete.push(item.id);
     else existingByKey.set(key, item);
   }
 

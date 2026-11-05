@@ -9,6 +9,7 @@ export const DURF_KEY = `${PLUGIN_ID}/durfCharacter`;
 export const HIDDEN_KEY = `${PLUGIN_ID}/hiddenBySync`;
 export const SYNC_ENABLED_KEY = `${PLUGIN_ID}/syncEnabled`;
 export const STATUS_KEY = `${PLUGIN_ID}/statusMarker`;
+export const STATUS_VERSION_KEY = `${PLUGIN_ID}/statusMarkerVersion`;
 
 // Broadcast channels between the popover and the background page
 export const STATUS_CHANNEL = `${PLUGIN_ID}/status`;
@@ -73,10 +74,13 @@ export function GetStatusMarkers(master) {
     return [{ kind: "overlay" }, { kind: "dead", text: "💀" }];
   if (master.state == "Away")
     return [{ kind: "overlay" }, { kind: "away", text: "💤" }];
-  if (master.type == "enemy")
-    return [{ kind: "damage", text: "💥 " + master.damage }];
 
   const markers = [];
+  if (master.type == "enemy") {
+    if (master.damage > 0) markers.push({ kind: "damage", text: "💥 " + master.damage });
+    return markers;
+  }
+
   if (master.wounds > 0) markers.push({ kind: "wounds", text: "🩸 " + master.wounds });
   if (master.light > 0) markers.push({ kind: "light", text: "☀️ " + master.light });
   return markers;

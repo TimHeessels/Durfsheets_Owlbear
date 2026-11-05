@@ -74,8 +74,9 @@ test("GetStatusMarkers shows state, wounds, light and damage", () => {
   assert.deepEqual(GetStatusMarkers({ state: "Away", type: "player" }), [
     { kind: "overlay" }, { kind: "away", text: "💤" },
   ]);
-  assert.deepEqual(GetStatusMarkers({ state: "Active", damage: 0, type: "enemy" }), [
-    { kind: "damage", text: "💥 0" },
+  assert.deepEqual(GetStatusMarkers({ state: "Active", damage: 0, type: "enemy" }), []);
+  assert.deepEqual(GetStatusMarkers({ state: "Active", damage: 3, type: "enemy" }), [
+    { kind: "damage", text: "💥 3" },
   ]);
   assert.deepEqual(GetStatusMarkers({ wounds: 0, light: 0, type: "player" }), []);
   assert.deepEqual(GetStatusMarkers({ wounds: 2, light: 1, type: "player" }), [

@@ -1,7 +1,7 @@
 # DurfSheets for Owlbear Rodeo
 
 An Owlbear Rodeo extension that keeps tokens in sync with a DurfSheets party. Characters and enemies appear as tokens, and their names, wounds, light dice, damage and art update as the party changes in DurfSheets.
-
+ 
 ## Install
 
 In your Owlbear Rodeo profile, add a custom extension with this manifest URL:
